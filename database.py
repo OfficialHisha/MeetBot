@@ -1,7 +1,13 @@
 import secrets
-from peewee import MySQLDatabase, Model, DateTimeField, TextField
+from peewee import MySQLDatabase, Model, DateTimeField, TextField, SmallIntegerField
 from datetime import timedelta, datetime
 import asyncio
+from enum import IntEnum
+
+class Notification(IntEnum):
+    NONE=0
+    HOUR=1
+    MINUTE=2
 
 _database = MySQLDatabase(secrets.database_db, user=secrets.database_user,
                           password=secrets.database_pass, host=secrets.database_host,
@@ -14,15 +20,22 @@ class BaseModel(Model):
 class Meeting(BaseModel):
     date_time = DateTimeField()
     user_list = TextField()
+    notified = SmallIntegerField(default=Notification.NONE)
 
 def initialize_database():
     _database.create_tables([Meeting])
 
 def add_meeting(time, users):
-    Meeting.create(date_time=time, user_list=users)
+    return Meeting.create(date_time=time, user_list=users)
+
+def remove_meeting(id):
+    return Meeting.delete().where(Meeting.id == id).execute()
 
 def remove_old_meetings():
-    Meeting.delete().where(Meeting.date_time < datetime.now()).execute()
+    return Meeting.delete().where(Meeting.date_time < datetime.now()).execute()
+
+def set_meeting_notification(id, notification):
+    return Meeting.update({Meeting.notified: notification}).where(Meeting.id == id).execute()
 
 def get_meeting_by_id(id):
     return Meeting.select().where(Meeting.id == id)
