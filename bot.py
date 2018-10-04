@@ -1,3 +1,5 @@
+from threading import Thread
+from math import ceil
 import secrets
 import discord
 import asyncio
@@ -19,14 +21,13 @@ class MeetBot(discord.Client):
         await asyncio.sleep(1)
         
         while not self.is_closed():
-            print("Checking meetings")
             for meeting in database.get_upcoming_meetings(60):
                 await self.check_upcoming_meeting(meeting)
             await asyncio.sleep(wait_time)
             
     async def check_upcoming_meeting(self, meeting):
         if(meeting.notified == database.Notification.NONE):
-            minutes_remaining = int((meeting.date_time - datetime.datetime.now()).seconds / 60)
+            minutes_remaining = int(ceil((meeting.date_time - datetime.datetime.now()).seconds / 60))
 
             if(meeting.date_time < (datetime.datetime.now() + datetime.timedelta(minutes=10))):
                 await self.notify_meeting(meeting, database.Notification.MINUTE, minutes_remaining)
@@ -40,29 +41,27 @@ class MeetBot(discord.Client):
 
     async def notify_meeting(self, meeting, notification, minutes_remaining):
         database.set_meeting_notification(meeting.id, notification)
-        print("Notification for " + str(meeting.user_list) + " for meeting at "
-                + str(meeting.date_time) + ". (" + str(minutes_remaining) + " minutes from now)")
+        await self.announce("Test meeting for " + str(meeting.user_list) + " starts in " + str(minutes_remaining) + " minutes")
         if(notification == database.Notification.MINUTE):
-            await self.set_timer(meeting, minutes_remaining)
+            Thread(target=self.set_timer, args=(meeting, minutes_remaining)).start()
 
-    async def set_timer(self, meeting, alarm):
-        print("Timer started with time: " + str(alarm) + " minutes")
-        start_time = time.time()
-        end_time = start_time + 60 * alarm
-
-        try:
-            while(time.time() < end_time):
-                await asyncio.sleep(1)
-                print(str(int(end_time - time.time())) + " seconds remaining")
-        except Exception as e:
-            print(e)
-
-        print("Meeting for " + str(meeting.user_list) + " starts now!")
+    def set_timer(self, meeting, alarm):
+        time.sleep(60 * alarm)
+        self.loop.create_task(self.announce("Test meeting for " + str(meeting.user_list) + " would start now"))
         database.remove_meeting(meeting.id)
 
+    async def announce(self, message, channel=secrets.bot_announcement_channel_id):
+        await self.guilds[0].get_channel(channel).send(message)# this might cause problems if the bot
+                                                               # is in multiple servers, will have to
+                                                               # check up on that
 
     async def on_message(self, message):
-        # don't respond to ourselves
+        # if a command channel is set, don't take commands from other channels
+        if (secrets.bot_cmd_channel_id != -1 and
+           message.channel.id != secrets.bot_cmd_channel_id):
+            return
+
+        # don't take commands from ourselves
         if message.author == self.user:
             return
 
@@ -70,12 +69,17 @@ class MeetBot(discord.Client):
         channel = message.channel
         guild = message.author.guild
 
-        await channel.send('Recieved')
-
         if content.startswith('test'):
-            time = datetime.datetime.now() + datetime.timedelta(minutes=10)
+            time = datetime.datetime.now() + datetime.timedelta(minutes=3)
             print("Setup meeting for " + str(message.author) + " at " + str(time))
+            await channel.send("Setting up test meeting for " + str(message.author))
             database.add_meeting(time, message.author)
+
+        if content.startswith('meetings'):
+            meetings = database.get_meetings_by_name(str(message.author))
+            print("Meetings for " + str(message.author) + ":")
+            for meeting in meetings:
+                print(str(meeting.id) + ": " + str(meeting.date_time) + " - " + str(meeting.user_list))
 
         if content.startswith('channel'):
             cmd = content.split(' ')
@@ -113,7 +117,7 @@ class MeetBot(discord.Client):
             if(meeting.notified != database.Notification.MINUTE):
                 await self.notify_meeting(meeting, database.Notification.MINUTE, minutes_remaining)
             else:
-                await self.set_timer(meeting, minutes_remaining)
+                Thread(target=self.set_timer, args=(meeting, minutes_remaining)).start()
 
 client = MeetBot()
 database.initialize_database()

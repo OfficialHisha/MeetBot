@@ -40,5 +40,8 @@ def set_meeting_notification(id, notification):
 def get_meeting_by_id(id):
     return Meeting.select().where(Meeting.id == id)
 
+def get_meetings_by_name(name):
+    return Meeting.select().where(Meeting.user_list.contains(name))
+
 def get_upcoming_meetings(time=10):
     return Meeting.select().where(Meeting.date_time <= (datetime.now() + timedelta(minutes=time)))
