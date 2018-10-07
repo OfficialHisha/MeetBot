@@ -18,6 +18,7 @@ class BaseModel(Model):
         database = _database
 
 class Meeting(BaseModel):
+    description = TextField()
     date_time = DateTimeField()
     user_list = TextField()
     notified = SmallIntegerField(default=Notification.NONE)
@@ -25,8 +26,8 @@ class Meeting(BaseModel):
 def initialize_database():
     _database.create_tables([Meeting])
 
-def add_meeting(time, users):
-    return Meeting.create(date_time=time, user_list=users)
+def add_meeting(description, time, users):
+    return Meeting.create(description=description, date_time=time, user_list=users)
 
 def remove_meeting(id):
     return Meeting.delete().where(Meeting.id == id).execute()
