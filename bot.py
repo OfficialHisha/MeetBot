@@ -48,9 +48,12 @@ class MeetBot(discord.Client):
         for user in mentions:
             users[user] = user.id
             user_string += f"{user}:{user.id};"
+        # remove the ';' after the last user
+        user_string = user_string[:len(user_string) - 1]
+        
 
 
-        print(f"Users: {author.name}. Time: {datetime}. Title: {title}. Recurring: {recurring}")
+        print(f"Users: {user_string}. Time: {datetime}. Title: {title}. Recurring: {recurring}")
         await channel.send(f"{author} setup a meeting at {datetime}")
 
         database.add_meeting(title, datetime, user_string)
@@ -88,10 +91,10 @@ class MeetBot(discord.Client):
 
     async def cmd_help(self, channel):
         help_string = str('Commands:\n```\nmeeting setup [recurring] ["title"] <timestamp> <@attendees>' +
-                      ' - Sets up a meeting for <@attendees> at the given <timestamp>\n' +
-                      'meeting cancel <id> - Cancels the meeting with the given <id>\n' + 
-                      'meetings - Shows a list of meetings you are assigned to\n' +
-                      'help - Shows this message\n```')
+                          ' - Sets up a meeting for <@attendees> at the given <timestamp>\n' +
+                          'meeting cancel <id> - Cancels the meeting with the given <id>\n' + 
+                          'meetings - Shows a list of meetings you are assigned to\n' +
+                          'help - Shows this message\n```')
 
         await channel.send(help_string)
 
@@ -100,9 +103,9 @@ class MeetBot(discord.Client):
         await asyncio.sleep(1)
         
         while not self.is_closed():
-            database.remove_old_meetings()
             for meeting in database.get_upcoming_meetings(60):
                 await self.check_upcoming_meeting(meeting)
+            database.remove_old_meetings()
             await asyncio.sleep(wait_time)
             
     async def check_upcoming_meeting(self, meeting):
@@ -121,14 +124,35 @@ class MeetBot(discord.Client):
 
     async def notify_meeting(self, meeting, notification, minutes_remaining):
         database.set_meeting_notification(meeting.id, notification)
-        await self.announce(f"Meeting '{meeting.description}' for {meeting.user_list} starts in {minutes_remaining} minutes")
+        mentions = await self.mention_users(meeting.user_list)
+        await self.announce(f"Meeting '{meeting.description}' for {mentions} starts in {minutes_remaining} minutes")
         if(notification == database.Notification.MINUTE):
             self.loop.create_task(self.set_timer(meeting, minutes_remaining))
 
     async def set_timer(self, meeting, alarm):
         await asyncio.sleep(60 * alarm)
-        await self.announce(f"Meeting '{meeting.description}' for {meeting.user_list} starts now")
+        mentions = await self.mention_users(meeting.user_list)
+        await self.announce(f"Meeting '{meeting.description}' for {mentions} starts now")
         database.remove_meeting(meeting.id)
+
+    async def get_users(self, user_list):
+        users = user_list.split(';')
+        actual_users = list()
+
+        for user in users:
+            user_info = user.split(':')
+            actual_users.append(self.get_user(int(user_info[1])))
+        return actual_users
+
+    async def mention_users(self, users):
+        # if we get users as a string we need to convert them to actual users
+        if type(users) is str:
+            users = await self.get_users(users)
+
+        mentions = ""
+        for user in users:
+            mentions += f"{user.mention} "
+        return mentions[:len(mentions) - 1]
 
     async def announce(self, message, channel=secrets.bot_announcement_channel_id):
         print(message)
