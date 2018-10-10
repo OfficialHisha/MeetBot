@@ -6,3 +6,4 @@ database_port = 0000#YOUR DB PORT
 database_user = "YOUR DB USER"
 database_pass = "YOUR DB PASS"
 database_db = "YOUR DB"
+log_level = 1#0 = No logs, 1 = commands, 2 = + info, 3 = + announcements, 4 = + errors, 5 = everything
