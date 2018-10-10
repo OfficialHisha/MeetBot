@@ -103,22 +103,26 @@ class MeetBot(discord.Client):
         await asyncio.sleep(1)
         
         while not self.is_closed():
+            database.remove_old_meetings()
             for meeting in database.get_upcoming_meetings(60):
                 await self.check_upcoming_meeting(meeting)
-            database.remove_old_meetings()
+
             await asyncio.sleep(wait_time)
             
     async def check_upcoming_meeting(self, meeting):
-        if(meeting.notified == database.Notification.NONE):
-            minutes_remaining = int(ceil((meeting.date_time - datetime.datetime.now()).seconds / 60))
+        minutes_remaining = int(ceil((meeting.date_time - datetime.datetime.now()).seconds / 60))
 
-            if(meeting.date_time < (datetime.datetime.now() + datetime.timedelta(minutes=10))):
+        # if we have not notified the meeting, check what type of notification to give
+        if(meeting.notified == database.Notification.NONE):
+            if(meeting.date_time <= (datetime.datetime.now() + datetime.timedelta(minutes=10))):
                 await self.notify_meeting(meeting, database.Notification.MINUTE, minutes_remaining)
-            elif(meeting.date_time < (datetime.datetime.now() + datetime.timedelta(minutes=60))):
+            elif(meeting.date_time <= (datetime.datetime.now() + datetime.timedelta(minutes=60))):
                 await self.notify_meeting(meeting, database.Notification.HOUR, minutes_remaining)
             
+        # if we have given the HOUR notification and there is ten minutes or less remaining
+        # give the MINUTE notification
         elif(meeting.notified == database.Notification.HOUR and
-             meeting.date_time < (datetime.datetime.now() + datetime.timedelta(minutes=10))):
+             meeting.date_time <= (datetime.datetime.now() + datetime.timedelta(minutes=10))):
                 await self.notify_meeting(meeting, database.Notification.MINUTE, minutes_remaining)
             
 

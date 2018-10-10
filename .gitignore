@@ -57,6 +57,11 @@ docs/_build/
 # PyBuilder
 target/
 
+# Don't ruin the fun
 secrets\.py
 
+# Visual Studio Code
 \.vscode/
+
+# Visual Studio
+.vs/

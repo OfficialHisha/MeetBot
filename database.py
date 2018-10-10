@@ -1,7 +1,6 @@
 import secrets
 from peewee import MySQLDatabase, Model, DateTimeField, TextField, SmallIntegerField
 from datetime import timedelta, datetime
-import asyncio
 from enum import IntEnum
 
 class Notification(IntEnum):
