@@ -60,6 +60,7 @@ target/
 # Don't ruin the fun
 src/secrets\.py
 src/secrets-prod\.py
+src/secrets-dev\.py
 
 # Visual Studio Code
 \.vscode/
