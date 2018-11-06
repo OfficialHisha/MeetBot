@@ -58,10 +58,12 @@ docs/_build/
 target/
 
 # Don't ruin the fun
-secrets\.py
+src/secrets\.py
+src/secrets-prod\.py
 
 # Visual Studio Code
 \.vscode/
 
 # Visual Studio
 .vs/
+\.idea/

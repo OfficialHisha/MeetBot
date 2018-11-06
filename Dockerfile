@@ -1,5 +1,6 @@
 FROM python:3
-COPY . /MeetBot
+COPY requirements.txt /tmp/
+RUN pip install -r /tmp/requirements.txt
+COPY ./src/ /MeetBot
 WORKDIR /MeetBot
-RUN pip install -r requirements.txt
-CMD python bot.py
+CMD ["python", "bot.py"]

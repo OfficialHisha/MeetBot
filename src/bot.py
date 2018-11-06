@@ -1,26 +1,27 @@
-from math import ceil
-from enum import Enum
-import secrets
-import discord
 import asyncio
 import database
-import datetime
-import dateparser
-import time
-import re
+import discord
+import secrets
+from dateparser import parse
+from datetime import datetime, timedelta
+from enum import Enum
+from math import ceil
+from re import compile, sub, search
+
 
 class LogType(Enum):
-        COMMAND = (1, "COMMAND")
-        INFO = (2, "INFO")
-        ANNOUNCEMENT = (3, "ANNOUNCEMENT")
-        ERROR = (4, "ERROR")
-        EXCEPTION = (5, "EXCEPTION")
+    COMMAND = (1, "COMMAND")
+    INFO = (2, "INFO")
+    ANNOUNCEMENT = (3, "ANNOUNCEMENT")
+    ERROR = (4, "ERROR")
+    EXCEPTION = (5, "EXCEPTION")
+
 
 class MeetBot(discord.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._mention_re = re.compile(" *<@[0-9]*>")
-        self._title_re = re.compile(" *[\"\'].*[\"\']")
+        self._mention_re = compile(" *<@&?[0-9]*>")
+        self._title_re = compile(" *[\"\'].*[\"\']")
 
         self._log = list()
 
@@ -30,17 +31,25 @@ class MeetBot(discord.Client):
         self.loop.create_task(self.check_meetings(10))
         self.loop.create_task(self.save_log("/", 60))
 
-    async def log_message(self, message, type):
+    async def get_labels_for_user(self, user):
+        labels = [user.name]
+        for role in user.roles:
+            if role.name == "@everyone":
+                continue
+            labels.append(role.name)
+        return labels
+
+    async def log_message(self, message, message_type):
         if secrets.log_level == 0:
             return
 
-        if type.value[0] <= secrets.log_level:
-            self._log.append(f"{datetime.datetime.now()}: [{type.value[1]}] {message}")
+        if message_type.value[0] <= secrets.log_level:
+            self._log.append(f"{datetime.utcnow()}: [{message_type.value[1]}] {message}")
 
     async def save_log(self, directory, frequency=3600):
         await self.wait_until_ready()
         await asyncio.sleep(1)
-        
+
         while not self.is_closed():
             if len(self._log) != 0:
                 print("Current log:")
@@ -52,14 +61,14 @@ class MeetBot(discord.Client):
     async def check_meetings(self, wait_time=300):
         await self.wait_until_ready()
         await asyncio.sleep(1)
-        
+
         while not self.is_closed():
             database.remove_old_meetings()
             for meeting in database.get_upcoming_meetings(60):
                 await self.check_upcoming_meeting(meeting)
 
             await asyncio.sleep(wait_time)
-    
+
     async def is_number(self, input):
         try:
             int(input)
@@ -68,47 +77,55 @@ class MeetBot(discord.Client):
             return False
 
     async def setup_meeting(self, channel, message, mentions, author, recurring=False):
-        users = dict()
-        user_string = ""
+        labels = dict()
+        label_string = ""
 
         try:
-            title = re.search(self._title_re, message).group()[1:].replace('"', '')
+            title = search(self._title_re, message).group()[1:].replace('"', '')
         except AttributeError:
             title = 'meeting'
 
         # make datetime object
-        datetime = dateparser.parse(re.sub(self._title_re, '', message)[1:])
-        if datetime == None:
-            await self.log_message(f"Could not parse datetime object from {re.sub(self._title_re, '', message)[1:]}", LogType.ERROR)
+        parsed_datetime = parse(sub(self._title_re, '', message)[1:])
+        if not parsed_datetime:
+            await self.log_message(f"Could not parse datetime object from {sub(self._title_re, '', message)[1:]}",
+                                   LogType.ERROR)
             await channel.send("There was an error while parsing the request, " +
-                               "this can be caused by an error in the date format " + 
-                               "or wrong parameters given. " + 
+                               "this can be caused by an error in the date format " +
+                               "or wrong parameters given. " +
                                "Example: meeting setup @user1 @user2 october 3 at 7:30pm")
             return
 
         # make the user list
-        for user in mentions:
-            users[user] = user.id
-            user_string += f"{user}:{user.id};"
+        for label in mentions:
+            labels[label.name] = label.id
+            label_string += f"{label.name}:{label.id};"
+
         # remove the ';' after the last user
-        user_string = user_string[:len(user_string) - 1]
-        
+        label_string = label_string[:len(label_string) - 1]
 
-        await self.log_message(f"{author} setup a meeting at {datetime}", LogType.INFO)
-        print(f"Users: {user_string}. Time: {datetime}. Title: {title}. Recurring: {recurring}")
-        await channel.send(f"{author} setup a meeting at {datetime}")
+        await self.log_message(f"{author} setup a meeting at {parsed_datetime}", LogType.INFO)
+        print(f"Users: {label_string}. Time: {parsed_datetime}. Title: {title}. Recurring: {recurring}")
+        await channel.send(f"{author} setup a meeting at {parsed_datetime}")
 
-        database.add_meeting(title, datetime, user_string)
+        database.add_meeting(title, parsed_datetime, label_string)
 
     async def cmd_meeting(self, message, mentions, author, channel):
+        if len(mentions) == 0:
+            await self.log_message(f"{author} attempted to setup meeting for noone", LogType.ERROR)
+            await channel.send(f"""Not enough information to create meeting.
+                                   Please define roles or users for the meeting by mentioning them in the command.""")
+            return
+
         if message.startswith("setup"):
             message = message[5:]
             if "recurring" in message:
                 # setup a recurring meeting
-                await self.setup_meeting(channel, re.sub(self._mention_re, '', message.replace(' recurring', '')), mentions, author, True)
+                await self.setup_meeting(channel, sub(self._mention_re, '', message.replace(' recurring', '')),
+                                         mentions, author, True)
             else:
                 # setup meeting
-                await self.setup_meeting(channel, re.sub(self._mention_re, '', message), mentions, author)
+                await self.setup_meeting(channel, sub(self._mention_re, '', message), mentions, author)
 
         elif message.startswith("cancel"):
             message = message[7:]
@@ -117,90 +134,109 @@ class MeetBot(discord.Client):
                 await self.log_message("Invalid ID '{message}' given for command 'meeting cancel'", LogType.ERROR)
                 await channel.send("Invalid ID. Syntax: meeting cancel <ID>")
                 return
-            
+
             if database.remove_meeting(int(message)) == 0:
                 await channel.send(f"There is no meeting with id {message}")
             else:
                 await channel.send(f"Canceled meeting with id {message}")
-            
+
     async def cmd_meetings(self, author, channel):
-        meetings = database.get_meetings_by_name(str(author))
-        meetings_string = "Your upcoming meetings are:\n```\n"
-        for meeting in meetings:
-            meetings_string += f"{meeting.id}: {meeting.date_time} - {meeting.description}\n"
-        meetings_string += "```"
+        labels = await self.get_labels_for_user(author)
+        meetings = list()
+        for label in labels:
+            for meeting in database.get_meetings_by_label(label):
+                meetings.append(meeting)
+
+        print(meetings)
+
+        if len(meetings) == 0:
+            meetings_string = "You have no upcoming meetings"
+        else:
+            meetings_string = "Your upcoming meetings are:\n```\n"
+            for meeting in meetings:
+                meetings_string += f"{meeting.id}: {meeting.date_time} - {meeting.description}\n"
+            meetings_string += "```"
 
         await channel.send(meetings_string)
 
     async def cmd_help(self, channel):
         help_string = str('Commands:\n```\nmeeting setup [recurring] ["title"] <timestamp> <@attendees>' +
                           ' - Sets up a meeting for <@attendees> at the given <timestamp>\n' +
-                          'meeting cancel <id> - Cancels the meeting with the given <id>\n' + 
+                          'meeting cancel <id> - Cancels the meeting with the given <id>\n' +
                           'meetings - Shows a list of meetings you are assigned to\n' +
                           'help - Shows this message\n```')
 
         await channel.send(help_string)
 
     async def check_upcoming_meeting(self, meeting):
-        minutes_remaining = int(ceil((meeting.date_time - datetime.datetime.now()).seconds / 60))
+        minutes_remaining = int(ceil((meeting.date_time - datetime.now()).seconds / 60))
 
         # if we have not notified the meeting, check what type of notification to give
-        if(meeting.notified == database.Notification.NONE):
-            if(meeting.date_time <= (datetime.datetime.now() + datetime.timedelta(minutes=10))):
+        if meeting.notified == database.Notification.NONE:
+            if meeting.date_time <= (datetime.now() + timedelta(minutes=10)):
                 await self.notify_meeting(meeting, database.Notification.MINUTE, minutes_remaining)
-            elif(meeting.date_time <= (datetime.datetime.now() + datetime.timedelta(minutes=60))):
+            elif meeting.date_time <= (datetime.now() + timedelta(minutes=60)):
                 await self.notify_meeting(meeting, database.Notification.HOUR, minutes_remaining)
-            
+
         # if we have given the HOUR notification and there is ten minutes or less remaining
         # give the MINUTE notification
-        elif(meeting.notified == database.Notification.HOUR and
-             meeting.date_time <= (datetime.datetime.now() + datetime.timedelta(minutes=10))):
-                await self.notify_meeting(meeting, database.Notification.MINUTE, minutes_remaining)
-            
+        elif (meeting.notified == database.Notification.HOUR and
+              meeting.date_time <= (datetime.now() + timedelta(minutes=10))):
+            await self.notify_meeting(meeting, database.Notification.MINUTE, minutes_remaining)
 
     async def notify_meeting(self, meeting, notification, minutes_remaining):
         database.set_meeting_notification(meeting.id, notification)
-        mentions = await self.mention_users(meeting.user_list)
+        mentions = await self.mention_labels(meeting.user_list)
         await self.announce(f"Meeting '{meeting.description}' for {mentions} starts in {minutes_remaining} minutes")
-        if(notification == database.Notification.MINUTE):
+        if notification == database.Notification.MINUTE:
             self.loop.create_task(self.set_timer(meeting, minutes_remaining))
 
     async def set_timer(self, meeting, alarm):
         await asyncio.sleep(60 * alarm)
-        mentions = await self.mention_users(meeting.user_list)
+        mentions = await self.mention_labels(meeting.user_list)
         await self.announce(f"Meeting '{meeting.description}' for {mentions} starts now")
         database.remove_meeting(meeting.id)
 
-    async def get_users(self, user_list):
-        users = user_list.split(';')
-        actual_users = list()
+    async def get_labels(self, label_list):
+        labels = label_list.split(';')
+        mentionables = list()
 
-        for user in users:
-            user_info = user.split(':')
-            actual_users.append(self.get_user(int(user_info[1])))
-        return actual_users
+        for label in labels:
+            print(label)
+            label_info = label.split(':')
+            user = self.get_user(int(label_info[1]))
+            if user:
+                mentionables.append(user)
+            else:
+                print("Role")
+                print(self.guilds[0].get_role(user))
+                mentionables.append(self.guilds[0].get_role(user))
+        return mentionables
 
-    async def mention_users(self, users):
-        # if we get users as a string we need to convert them to actual users
-        if type(users) is str:
-            users = await self.get_users(users)
+    async def mention_labels(self, labels):
+        print(f"label type: {type(labels)}")
+        # if we get labels as a string we need to convert them to mentionable labels
+        if type(labels) is str:
+            labels = await self.get_labels(labels)
 
         mentions = ""
-        for user in users:
-            mentions += f"{user.mention} "
+        print(f"labels: {labels}")
+        for label in labels:
+            print(f"label: {label}")
+            mentions += f"{label.mention} "
         return mentions[:len(mentions) - 1]
 
     async def announce(self, message, channel=secrets.bot_announcement_channel_id):
         await self.log_message(message, LogType.ANNOUNCEMENT)
         print(message)
-        await self.guilds[0].get_channel(channel).send(message)# this might cause problems if the bot
-                                                               # is in multiple servers, will have to
-                                                               # check up on that
+        await self.guilds[0].get_channel(channel).send(message)  # this might cause problems if the bot
+        # is in multiple servers, will have to
+        # check up on that
 
     async def on_message(self, message):
         # if a command channel is set, don't take commands from other channels
         if (secrets.bot_cmd_channel_id != -1 and
-           message.channel.id != secrets.bot_cmd_channel_id):
+                message.channel.id != secrets.bot_cmd_channel_id):
             return
 
         # don't take commands from ourselves
@@ -213,47 +249,23 @@ class MeetBot(discord.Client):
         guild = message.author.guild
 
         await self.log_message(f"{author}: {message.content}", LogType.COMMAND)
-        print(message.content)
 
         try:
             if content.startswith("meetings"):
                 await self.cmd_meetings(author, channel)
             elif content.startswith("meeting"):
-                await self.cmd_meeting(content[8:], message.mentions, author, channel)
+                await self.cmd_meeting(content[8:], message.mentions + message.role_mentions, author, channel)
             elif content.startswith("help"):
                 await self.cmd_help(channel)
-            else:# unrecognised command given
+            elif content.startswith("channel"):
+                print(channel.id)
+            else:  # unrecognised command given
                 await self.log_message(f"Unrecognised command string '{content}'", LogType.ERROR)
                 return
         except Exception as e:
             print(e)
             await self.log_message(e, LogType.EXCEPTION)
             await channel.send("An unexpected error occurred")
-
-        if content.startswith('channel'):
-            cmd = content.split(' ')
-            
-            if len(cmd) != 3:
-                await channel.send("Incorrect use of command 'channel'")
-                return
-
-            if cmd[1] == "create":
-                await guild.create_voice_channel(cmd[2], category=guild.get_channel(channel.category_id), reason="Created by " + str(message.author))
-                await channel.send(f"Created channel '{cmd[2]}'")
-                return
-            elif cmd[1] == "delete":
-                for guild_channel in client.get_all_channels():
-                    if str(guild.get_channel(guild_channel.category_id)) == "Developer corner":
-                        if str(guild_channel) == cmd[2]:
-                            await guild_channel.delete()
-                            await channel.send(f"Deleted channel '{cmd[2]}'")
-                            return
-                
-                await channel.send(f"Channel '{cmd[2]}' not found")
-                return
-            else:
-                await channel.send("Incorrect use of command 'channel'")
-                return
 
     async def on_ready(self):
         print('Logged in as')
@@ -262,12 +274,13 @@ class MeetBot(discord.Client):
         print('------')
 
         for meeting in database.get_upcoming_meetings(10):
-            minutes_remaining = int((meeting.date_time - datetime.datetime.now()).seconds / 60)
-            if(meeting.notified != database.Notification.MINUTE):
+            minutes_remaining = int((meeting.date_time - datetime.now()).seconds / 60)
+            if meeting.notified != database.Notification.MINUTE:
                 await self.notify_meeting(meeting, database.Notification.MINUTE, minutes_remaining)
             else:
                 self.loop.create_task(self.set_timer(meeting, minutes_remaining))
 
+
 database.initialize_database()
-client = MeetBot()
-client.run(secrets.bot_token)
+bot = MeetBot()
+bot.run(secrets.bot_token)

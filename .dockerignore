@@ -1,1 +1,7 @@
-secrets_template.py
+src/secrets_template.py
+Dockerfile
+LICENSE.md
+README.md
+build_docker.sh
+.gitignore
+.git/
