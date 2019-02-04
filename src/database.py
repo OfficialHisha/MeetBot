@@ -1,4 +1,4 @@
-import secrets
+import os
 from peewee import MySQLDatabase, Model, DateTimeField, TextField, SmallIntegerField
 from datetime import timedelta, datetime
 from enum import IntEnum
@@ -10,9 +10,9 @@ class Notification(IntEnum):
     MINUTE = 2
 
 
-_database = MySQLDatabase(secrets.database_db, user=secrets.database_user,
-                          password=secrets.database_pass, host=secrets.database_host,
-                          port=secrets.database_port)
+_database = MySQLDatabase(os.environ["MEETBOT_DATABASE"], user=os.environ["MEETBOT_DATABASE_USERNAME"],
+                          password=os.environ["MEETBOT_DATABASE_PASSWORD"], host=os.environ["MEETBOT_DATABASE_HOST"],
+                          port=int(os.environ['MEETBOT_DATABASE_PORT']))
 
 
 class BaseModel(Model):

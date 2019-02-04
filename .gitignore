@@ -68,3 +68,5 @@ src/secrets-dev\.py
 # Visual Studio
 .vs/
 \.idea/
+
+Dockerfile
