@@ -1,7 +1,16 @@
 import os
-from peewee import MySQLDatabase, Model, DateTimeField, TextField, SmallIntegerField
+from peewee import Model, DateTimeField, TextField, SmallIntegerField
+from peewee_async import MySQLDatabase, Manager
 from datetime import timedelta, datetime
 from enum import IntEnum
+
+
+_database = MySQLDatabase(database=os.environ["MEETBOT_DATABASE"],
+                          user=os.environ["MEETBOT_DATABASE_USERNAME"],
+                          password=os.environ["MEETBOT_DATABASE_PASSWORD"],
+                          host=os.environ["MEETBOT_DATABASE_HOST"],
+                          port=int(os.environ['MEETBOT_DATABASE_PORT']))
+_objects = Manager(_database)
 
 
 class Notification(IntEnum):
@@ -10,50 +19,49 @@ class Notification(IntEnum):
     MINUTE = 2
 
 
-_database = MySQLDatabase(os.environ["MEETBOT_DATABASE"], user=os.environ["MEETBOT_DATABASE_USERNAME"],
-                          password=os.environ["MEETBOT_DATABASE_PASSWORD"], host=os.environ["MEETBOT_DATABASE_HOST"],
-                          port=int(os.environ['MEETBOT_DATABASE_PORT']))
-
-
-class BaseModel(Model):
-    class Meta:
-        database = _database
-
-
-class Meeting(BaseModel):
+class Meeting(Model):
     description = TextField()
     date_time = DateTimeField()
     user_list = TextField()
     notified = SmallIntegerField(default=Notification.NONE)
 
-
-def initialize_database():
-    _database.create_tables([Meeting])
-
-
-def add_meeting(description, time, users):
-    return Meeting.create(description=description, date_time=time, user_list=users)
+    class Meta:
+        database = _database
 
 
-def remove_meeting(id):
-    return Meeting.delete().where(Meeting.id == id).execute()
+Meeting.create_table(True)
+_database.allow_sync = False
 
 
-def remove_old_meetings():
-    return Meeting.delete().where(Meeting.date_time < datetime.now()).execute()
+async def add_meeting(description, time, users):
+    await _objects.create(Meeting, description=description, date_time=time, user_list=users)
 
 
-def set_meeting_notification(id, notification):
-    return Meeting.update({Meeting.notified: notification}).where(Meeting.id == id).execute()
+async def remove_meeting(meeting_id):
+    meeting = await _objects.get(Meeting, id=meeting_id)
+    await _objects.delete(Meeting, meeting)
 
 
-def get_meeting_by_id(id):
-    return Meeting.select().where(Meeting.id == id)
+async def remove_old_meetings():
+    meetings = await _objects.get(Meeting, Meeting.date_time < datetime.now())
+    await _objects.delete(Meeting, meetings)
 
 
-def get_meetings_by_label(name):
-    return Meeting.select().where(Meeting.user_list.contains(name))
+async def set_meeting_notification(meeting_id, notification):
+    meeting = await _objects.get(Meeting, id=meeting_id)
+    meeting.notified = notification
+    await _objects.update(meeting)
+
+    Meeting.update({Meeting.notified: notification}).where(Meeting.id == meeting_id).execute()
 
 
-def get_upcoming_meetings(time=10):
-    return Meeting.select().where(Meeting.date_time <= (datetime.now() + timedelta(minutes=time)))
+async def get_meeting_by_id(meeting_id):
+    return await _objects.get(Meeting, id=meeting_id)
+
+
+async def get_meetings_by_label(name):
+    return await _objects.get(Meeting, name=name)
+
+
+async def get_upcoming_meetings(time=10):
+    return await _objects.get(Meeting, Meeting.date_time <= (datetime.now() + timedelta(minutes=time)))

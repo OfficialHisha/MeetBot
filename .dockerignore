@@ -1,9 +1,7 @@
-src/secrets_template.py
-src/secrets-prod.py
-src/secrets-dev.py
 Dockerfile
 LICENSE.md
 README.md
 build_docker.sh
+run_docker.sh
 .gitignore
 .git/

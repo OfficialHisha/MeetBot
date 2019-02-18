@@ -17,12 +17,13 @@ class MeetBot(discord.Client):
 
         logging.basicConfig(filename='meetbot.log', level=int(os.environ["LOG_LEVEL"]))
 
-        database.remove_old_meetings()
+        await database.remove_old_meetings()
 
         # create the background tasks and run them in the background
         self.loop.create_task(self.check_meetings(10))
 
-    async def get_labels_for_user(self, user):
+    @staticmethod
+    async def get_labels_for_user(user):
         labels = [user.name]
         for role in user.roles:
             if role.name == "@everyone":
@@ -30,23 +31,34 @@ class MeetBot(discord.Client):
             labels.append(role.name)
         return labels
 
+    @staticmethod
+    async def is_number(number):
+        try:
+            int(number)
+            return True
+        except ValueError:
+            return False
+
+    @staticmethod
+    async def cmd_help(channel):
+        help_string = str('Commands:\n```\nmeeting setup [recurring] ["title"] <timestamp> <@attendees>' +
+                          ' - Sets up a meeting for <@attendees> at the given <timestamp>\n' +
+                          'meeting cancel <id> - Cancels the meeting with the given <id>\n' +
+                          'meetings - Shows a list of meetings you are assigned to\n' +
+                          'help - Shows this message\n```')
+
+        await channel.send(help_string)
+
     async def check_meetings(self, wait_time=300):
         await self.wait_until_ready()
         await asyncio.sleep(1)
 
         while not self.is_closed():
-            database.remove_old_meetings()
-            for meeting in database.get_upcoming_meetings(60):
+            await database.remove_old_meetings()
+            for meeting in await database.get_upcoming_meetings(60):
                 await self.check_upcoming_meeting(meeting)
 
             await asyncio.sleep(wait_time)
-
-    async def is_number(self, input):
-        try:
-            int(input)
-            return True
-        except ValueError:
-            return False
 
     async def setup_meeting(self, channel, message, mentions, author, recurring=False):
         labels = dict()
@@ -76,17 +88,18 @@ class MeetBot(discord.Client):
         label_string = label_string[:len(label_string) - 1]
 
         logging.info(f"{author} setup a meeting at {parsed_datetime}")
-        Logging.debug(f"Users: {label_string}. Time: {parsed_datetime}. Title: {title}. Recurring: {recurring}")
+        logging.debug(f"Users: {label_string}. Time: {parsed_datetime}. Title: {title}. Recurring: {recurring}")
         await channel.send(f"{author} setup a meeting at {parsed_datetime}")
 
-        database.add_meeting(title, parsed_datetime, label_string)
+        await database.add_meeting(title, parsed_datetime, label_string)
 
     async def cmd_meeting(self, message, mentions, author, channel):
         if message.startswith("setup"):
             if len(mentions) == 0:
                 logging.warning(f"{author} attempted to setup meeting for noone")
                 await channel.send(f"""Not enough information to create meeting.
-                                       Please define roles or users for the meeting by mentioning them in the command.""")
+                                       Please define roles or users for the meeting
+                                       by mentioning them in the command.""")
                 return
             message = message[5:]
             if "recurring" in message:
@@ -105,7 +118,7 @@ class MeetBot(discord.Client):
                 await channel.send("Invalid ID. Syntax: meeting cancel <ID>")
                 return
 
-            if database.remove_meeting(int(message)) == 0:
+            if await database.remove_meeting(int(message)) == 0:
                 await channel.send(f"There is no meeting with id {message}")
             else:
                 await channel.send(f"Canceled meeting with id {message}")
@@ -114,7 +127,7 @@ class MeetBot(discord.Client):
         labels = await self.get_labels_for_user(author)
         meetings = list()
         for label in labels:
-            for meeting in database.get_meetings_by_label(label):
+            for meeting in await database.get_meetings_by_label(label):
                 meetings.append(meeting)
 
         print(meetings)
@@ -128,15 +141,6 @@ class MeetBot(discord.Client):
             meetings_string += "```"
 
         await channel.send(meetings_string)
-
-    async def cmd_help(self, channel):
-        help_string = str('Commands:\n```\nmeeting setup [recurring] ["title"] <timestamp> <@attendees>' +
-                          ' - Sets up a meeting for <@attendees> at the given <timestamp>\n' +
-                          'meeting cancel <id> - Cancels the meeting with the given <id>\n' +
-                          'meetings - Shows a list of meetings you are assigned to\n' +
-                          'help - Shows this message\n```')
-
-        await channel.send(help_string)
 
     async def check_upcoming_meeting(self, meeting):
         minutes_remaining = int(ceil((meeting.date_time - datetime.now()).seconds / 60))
@@ -155,7 +159,7 @@ class MeetBot(discord.Client):
             await self.notify_meeting(meeting, database.Notification.MINUTE, minutes_remaining)
 
     async def notify_meeting(self, meeting, notification, minutes_remaining):
-        database.set_meeting_notification(meeting.id, notification)
+        await database.set_meeting_notification(meeting.id, notification)
         mentions = await self.mention_labels(meeting.user_list)
         await self.announce(f"Meeting '{meeting.description}' for {mentions} starts in {minutes_remaining} minutes")
         if notification == database.Notification.MINUTE:
@@ -165,7 +169,7 @@ class MeetBot(discord.Client):
         await asyncio.sleep(60 * alarm)
         mentions = await self.mention_labels(meeting.user_list)
         await self.announce(f"Meeting '{meeting.description}' for {mentions} starts now")
-        database.remove_meeting(meeting.id)
+        await database.remove_meeting(meeting.id)
 
     async def get_labels(self, label_list):
         labels = label_list.split(';')
@@ -199,9 +203,10 @@ class MeetBot(discord.Client):
     async def announce(self, message, channel=os.environ["MEETBOT_ANNOUNCE_CHANNEL"]):
         logging.debug(f"ANNOUNCEMENT - {message}")
         print(message)
-        await self.guilds[0].get_channel(channel).send(message)  # this might cause problems if the bot
-                                                                 # is in multiple servers, will have to
-                                                                 # check up on that
+        await self.guilds[0].get_channel(channel).send(message)
+        # this might cause problems if the bot
+        # is in multiple servers, will have to
+        # check up on that
 
     async def on_message(self, message):
         # if a command channel is set, don't take commands from other channels
@@ -216,7 +221,7 @@ class MeetBot(discord.Client):
         content = message.content.lower()
         author = message.author
         channel = message.channel
-        guild = message.author.guild
+        # guild = message.author.guild
 
         logging.debug(f"COMMAND - {author}: {message.content}")
 
@@ -243,7 +248,7 @@ class MeetBot(discord.Client):
         print(self.user.id)
         print('------')
 
-        for meeting in database.get_upcoming_meetings(10):
+        for meeting in await database.get_upcoming_meetings(10):
             minutes_remaining = int((meeting.date_time - datetime.now()).seconds / 60)
             if meeting.notified != database.Notification.MINUTE:
                 await self.notify_meeting(meeting, database.Notification.MINUTE, minutes_remaining)
@@ -252,6 +257,5 @@ class MeetBot(discord.Client):
 
 
 if __name__ == "__main__":
-    database.initialize_database()
     bot = MeetBot()
     bot.run(os.environ["MEETBOT_TOKEN"])
