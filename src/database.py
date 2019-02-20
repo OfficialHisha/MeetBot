@@ -52,8 +52,6 @@ async def set_meeting_notification(meeting_id, notification):
     meeting.notified = notification
     await _objects.update(meeting)
 
-    Meeting.update({Meeting.notified: notification}).where(Meeting.id == meeting_id).execute()
-
 
 async def get_meeting_by_id(meeting_id):
     return await _objects.get(Meeting, id=meeting_id)

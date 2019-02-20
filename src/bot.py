@@ -17,7 +17,8 @@ class MeetBot(discord.Client):
 
         logging.basicConfig(filename='meetbot.log', level=int(os.environ["LOG_LEVEL"]))
 
-        await database.remove_old_meetings()
+        # Remove old meetings when we start the bot
+        self.loop.run_until_complete(database.remove_old_meetings())
 
         # create the background tasks and run them in the background
         self.loop.create_task(self.check_meetings(10))
