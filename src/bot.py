@@ -224,19 +224,20 @@ class MeetBot(Client):
         channel = message.channel
         # guild = message.author.guild
 
-        logging.debug(f"COMMAND - {author}: {message.content}")
-
         try:
             if content.startswith("meetings"):
+                logging.info(f"COMMAND - {author}: {message.content}")
                 await self.cmd_meetings(author, channel)
             elif content.startswith("meeting"):
+                logging.info(f"COMMAND - {author}: {message.content}")
                 await self.cmd_meeting(content[8:], message.mentions + message.role_mentions, author, channel)
             elif content.startswith("help"):
+                logging.info(f"COMMAND - {author}: {message.content}")
                 await self.cmd_help(channel)
             elif content.startswith("channel"):
+                logging.info(f"COMMAND - {author}: {message.content}")
                 print(channel.id)
             else:  # unrecognised command given
-                logging.warning(f"{author} entered an unrecognised command string '{content}'")
                 return
         except Exception as e:
             print(e)
