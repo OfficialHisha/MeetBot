@@ -1,15 +1,15 @@
-import os
+from os import environ
 from peewee import Model, DateTimeField, TextField, SmallIntegerField
 from peewee_async import MySQLDatabase, Manager
 from datetime import timedelta, datetime
 from enum import IntEnum
 
 
-_database = MySQLDatabase(database=os.environ["MEETBOT_DATABASE"],
-                          user=os.environ["MEETBOT_DATABASE_USERNAME"],
-                          password=os.environ["MEETBOT_DATABASE_PASSWORD"],
-                          host=os.environ["MEETBOT_DATABASE_HOST"],
-                          port=int(os.environ['MEETBOT_DATABASE_PORT']))
+_database = MySQLDatabase(database=environ["MEETBOT_DATABASE"],
+                          user=environ["MEETBOT_DATABASE_USERNAME"],
+                          password=environ["MEETBOT_DATABASE_PASSWORD"],
+                          host=environ["MEETBOT_DATABASE_HOST"],
+                          port=int(environ['MEETBOT_DATABASE_PORT']))
 _objects = Manager(_database)
 
 

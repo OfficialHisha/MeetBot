@@ -1,21 +1,21 @@
-import asyncio
 import database
-import discord
-import os
 import logging
+from discord import Client
+from os import environ
+from asyncio import sleep
 from dateparser import parse
 from datetime import datetime, timedelta
 from math import ceil
 from re import compile, sub, search
 
 
-class MeetBot(discord.Client):
+class MeetBot(Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._mention_re = compile(" *<@&?[0-9]*>")
         self._title_re = compile(" *[\"\'].*[\"\']")
 
-        logging.basicConfig(filename='meetbot.log', level=int(os.environ["LOG_LEVEL"]))
+        logging.basicConfig(filename='meetbot.log', level=int(environ["LOG_LEVEL"]))
 
         # Remove old meetings when we start the bot
         self.loop.run_until_complete(database.remove_old_meetings())
@@ -52,14 +52,14 @@ class MeetBot(discord.Client):
 
     async def check_meetings(self, wait_time=300):
         await self.wait_until_ready()
-        await asyncio.sleep(1)
+        await sleep(1)
 
         while not self.is_closed():
             await database.remove_old_meetings()
             for meeting in await database.get_upcoming_meetings(60):
                 await self.check_upcoming_meeting(meeting)
 
-            await asyncio.sleep(wait_time)
+            await sleep(wait_time)
 
     async def setup_meeting(self, channel, message, mentions, author, recurring=False):
         labels = dict()
@@ -167,7 +167,7 @@ class MeetBot(discord.Client):
             self.loop.create_task(self.set_timer(meeting, minutes_remaining))
 
     async def set_timer(self, meeting, alarm):
-        await asyncio.sleep(60 * alarm)
+        await sleep(60 * alarm)
         mentions = await self.mention_labels(meeting.user_list)
         await self.announce(f"Meeting '{meeting.description}' for {mentions} starts now")
         await database.remove_meeting(meeting.id)
@@ -201,7 +201,7 @@ class MeetBot(discord.Client):
             mentions += f"{label.mention} "
         return mentions[:len(mentions) - 1]
 
-    async def announce(self, message, channel=os.environ["MEETBOT_ANNOUNCE_CHANNEL"]):
+    async def announce(self, message, channel=environ["MEETBOT_ANNOUNCE_CHANNEL"]):
         logging.debug(f"ANNOUNCEMENT - {message}")
         print(message)
         await self.guilds[0].get_channel(channel).send(message)
@@ -211,8 +211,8 @@ class MeetBot(discord.Client):
 
     async def on_message(self, message):
         # if a command channel is set, don't take commands from other channels
-        if (int(os.environ["MEETBOT_COMMAND_CHANNEL"]) != -1 and
-                message.channel.id != int(os.environ["MEETBOT_COMMAND_CHANNEL"])):
+        if (int(environ["MEETBOT_COMMAND_CHANNEL"]) != -1 and
+                message.channel.id != int(environ["MEETBOT_COMMAND_CHANNEL"])):
             return
 
         # don't take commands from ourselves
@@ -259,4 +259,4 @@ class MeetBot(discord.Client):
 
 if __name__ == "__main__":
     bot = MeetBot()
-    bot.run(os.environ["MEETBOT_TOKEN"])
+    bot.run(environ["MEETBOT_TOKEN"])
