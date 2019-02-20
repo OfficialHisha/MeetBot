@@ -40,3 +40,7 @@
     * Database ip or hostname
 * MEETBOT_DATABASE_PORT
     * Database port
+* MEETBOT_COMMAND_CHANNEL
+    * Channel in which MeetBot will look for commands
+* MEETBOT_ANNOUNCE_CHANNEL
+    * Channel in which MeetBot will make announcements

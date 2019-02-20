@@ -43,8 +43,8 @@ async def remove_meeting(meeting_id):
 
 
 async def remove_old_meetings():
-    meetings = await _objects.get(Meeting, Meeting.date_time < datetime.now())
-    await _objects.delete(Meeting, meetings)
+    old_meetings = await _objects.get(Meeting.select().where(Meeting.date_time < datetime.now()))
+    await _objects.delete(Meeting, old_meetings)
 
 
 async def set_meeting_notification(meeting_id, notification):
@@ -62,4 +62,5 @@ async def get_meetings_by_label(name):
 
 
 async def get_upcoming_meetings(time=10):
-    return await _objects.get(Meeting, Meeting.date_time <= (datetime.now() + timedelta(minutes=time)))
+    upcoming_meetings = Meeting.select().where(Meeting.date_time <= (datetime.now() + timedelta(minutes=time)))
+    return await _objects.get(Meeting, upcoming_meetings)
