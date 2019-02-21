@@ -22,6 +22,7 @@ class Notification(IntEnum):
 class Meeting(Model):
     description = TextField()
     date_time = DateTimeField()
+    time_zone = SmallIntegerField()
     user_list = TextField()
     notified = SmallIntegerField(default=Notification.NONE)
 
@@ -33,18 +34,19 @@ Meeting.create_table(True)
 _database.allow_sync = False
 
 
-async def add_meeting(description, time, users):
-    await _objects.create(Meeting, description=description, date_time=time, user_list=users)
+async def add_meeting(description, time, time_zone, users):
+    await _objects.create(Meeting, description=description, date_time=time, time_zone=time_zone, user_list=users)
 
 
 async def remove_meeting(meeting_id):
     meeting = await _objects.get(Meeting, id=meeting_id)
-    await _objects.delete(Meeting, meeting)
+    await _objects.delete(meeting)
 
 
 async def remove_old_meetings():
-    old_meetings = await _objects.get(Meeting.select().where(Meeting.date_time < datetime.now()))
-    await _objects.delete(Meeting, old_meetings)
+    old_meetings = await _objects.execute(Meeting.select().where(Meeting.date_time < datetime.now()))
+    for meeting in old_meetings:
+        await _objects.delete(meeting)
 
 
 async def set_meeting_notification(meeting_id, notification):
@@ -57,10 +59,9 @@ async def get_meeting_by_id(meeting_id):
     return await _objects.get(Meeting, id=meeting_id)
 
 
-async def get_meetings_by_label(name):
-    return await _objects.get(Meeting, name=name)
+async def get_meetings_by_user(user):
+    return await _objects.execute(Meeting.select().where(Meeting.user_list.contains(user)))
 
 
 async def get_upcoming_meetings(time=10):
-    upcoming_meetings = Meeting.select().where(Meeting.date_time <= (datetime.now() + timedelta(minutes=time)))
-    return await _objects.get(Meeting, upcoming_meetings)
+    return await _objects.execute(Meeting.select().where(Meeting.date_time <= (datetime.now() + timedelta(minutes=time))))

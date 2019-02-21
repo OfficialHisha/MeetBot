@@ -68,6 +68,7 @@ class MeetBot(Client):
         try:
             title = search(self._title_re, message).group()[1:].replace('"', '')
         except AttributeError:
+            logging.debug("No meeting description was given, setting default name")
             title = 'meeting'
 
         # make datetime object
@@ -79,6 +80,12 @@ class MeetBot(Client):
                                "or wrong parameters given. " +
                                "Example: meeting setup @user1 @user2 october 3 at 7:30pm")
             return
+
+        parsed_datetime = parsed_datetime.split('+')
+        date_time = parsed_datetime[0]
+        time_zone = 0
+        if len(parsed_datetime) == 2:
+            time_zone = parsed_datetime[1]
 
         # make the user list
         for label in mentions:
@@ -92,12 +99,12 @@ class MeetBot(Client):
         logging.debug(f"Users: {label_string}. Time: {parsed_datetime}. Title: {title}. Recurring: {recurring}")
         await channel.send(f"{author} setup a meeting at {parsed_datetime}")
 
-        await database.add_meeting(title, parsed_datetime, label_string)
+        await database.add_meeting(title, date_time, time_zone, label_string)
 
     async def cmd_meeting(self, message, mentions, author, channel):
         if message.startswith("setup"):
             if len(mentions) == 0:
-                logging.warning(f"{author} attempted to setup meeting for noone")
+                logging.info(f"{author} attempted to setup meeting for noone")
                 await channel.send(f"""Not enough information to create meeting.
                                        Please define roles or users for the meeting
                                        by mentioning them in the command.""")
@@ -128,10 +135,8 @@ class MeetBot(Client):
         labels = await self.get_labels_for_user(author)
         meetings = list()
         for label in labels:
-            for meeting in await database.get_meetings_by_label(label):
+            for meeting in await database.get_meetings_by_user(label):
                 meetings.append(meeting)
-
-        print(meetings)
 
         if len(meetings) == 0:
             meetings_string = "You have no upcoming meetings"
@@ -177,37 +182,33 @@ class MeetBot(Client):
         mentionables = list()
 
         for label in labels:
-            print(label)
             label_info = label.split(':')
             user = self.get_user(int(label_info[1]))
             if user:
                 mentionables.append(user)
             else:
-                print("Role")
-                print(self.guilds[0].get_role(user))
                 mentionables.append(self.guilds[0].get_role(user))
         return mentionables
 
     async def mention_labels(self, labels):
-        print(f"label type: {type(labels)}")
         # if we get labels as a string we need to convert them to mentionable labels
         if type(labels) is str:
             labels = await self.get_labels(labels)
 
         mentions = ""
-        print(f"labels: {labels}")
         for label in labels:
-            print(f"label: {label}")
             mentions += f"{label.mention} "
         return mentions[:len(mentions) - 1]
 
-    async def announce(self, message, channel=environ["MEETBOT_ANNOUNCE_CHANNEL"]):
+    async def announce(self, message, channel_id=environ["MEETBOT_ANNOUNCE_CHANNEL"]):
         logging.debug(f"ANNOUNCEMENT - {message}")
-        print(message)
-        await self.guilds[0].get_channel(channel).send(message)
-        # this might cause problems if the bot
-        # is in multiple servers, will have to
-        # check up on that
+        for guild in self.guilds:
+            channel = guild.get_channel(channel_id)
+            if channel:
+                await channel.send(message)
+                return
+
+        logging.error(f"Channel with id '{channel_id}' not found in guilds")
 
     async def on_message(self, message):
         # if a command channel is set, don't take commands from other channels
@@ -236,19 +237,15 @@ class MeetBot(Client):
                 await self.cmd_help(channel)
             elif content.startswith("channel"):
                 logging.info(f"COMMAND - {author}: {message.content}")
-                print(channel.id)
+                await channel.send(channel.id)
             else:  # unrecognised command given
                 return
         except Exception as e:
-            print(e)
             logging.exception(e)
             await channel.send("An unexpected error occurred")
 
     async def on_ready(self):
-        print('Logged in as')
-        print(self.user.name)
-        print(self.user.id)
-        print('------')
+        logging.info(f'Logged in as: {self.user.name}')
 
         for meeting in await database.get_upcoming_meetings(10):
             minutes_remaining = int((meeting.date_time - datetime.now()).seconds / 60)
