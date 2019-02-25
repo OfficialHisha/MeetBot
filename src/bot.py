@@ -50,6 +50,18 @@ class MeetBot(Client):
 
         await channel.send(help_string)
 
+    @staticmethod
+    async def get_timezone_offset(dt):
+        if not dt.tzinfo:
+            return 0
+
+        offset_days = dt.utcoffset().days
+        offset_hours = dt.utcoffset().seconds / 60 / 60
+        if offset_days == 0:
+            return offset_hours
+        else:
+            return abs(offset_days) / offset_days * offset_hours
+
     async def check_meetings(self, wait_time=300):
         await self.wait_until_ready()
         await sleep(1)
@@ -80,12 +92,8 @@ class MeetBot(Client):
                                "or wrong parameters given. " +
                                "Example: meeting setup @user1 @user2 october 3 at 7:30pm")
             return
-
-        parsed_datetime = parsed_datetime.split('+')
-        date_time = parsed_datetime[0]
-        time_zone = 0
-        if len(parsed_datetime) == 2:
-            time_zone = parsed_datetime[1]
+        time_zone_offset = await self.get_timezone_offset(parsed_datetime)
+        utc_time = parsed_datetime - timedelta(hours=time_zone_offset)
 
         # make the user list
         for label in mentions:
@@ -96,10 +104,10 @@ class MeetBot(Client):
         label_string = label_string[:len(label_string) - 1]
 
         logging.info(f"{author} setup a meeting at {parsed_datetime}")
-        logging.debug(f"Users: {label_string}. Time: {parsed_datetime}. Title: {title}. Recurring: {recurring}")
+        logging.debug(f"Users: {label_string}. Time: {parsed_datetime} (UTC: {utc_time}). Title: {title}. Recurring: {recurring}")
         await channel.send(f"{author} setup a meeting at {parsed_datetime}")
 
-        await database.add_meeting(title, date_time, time_zone, label_string)
+        await database.add_meeting(title, utc_time, time_zone_offset, label_string)
 
     async def cmd_meeting(self, message, mentions, author, channel):
         if message.startswith("setup"):
@@ -143,25 +151,26 @@ class MeetBot(Client):
         else:
             meetings_string = "Your upcoming meetings are:\n```\n"
             for meeting in meetings:
-                meetings_string += f"{meeting.id}: {meeting.date_time} - {meeting.description}\n"
+                meeting_dt = meeting.date_time + timedelta(hours=meeting.time_zone)
+                meetings_string += f"{meeting.id}: {meeting_dt} - {meeting.description}\n"
             meetings_string += "```"
 
         await channel.send(meetings_string)
 
     async def check_upcoming_meeting(self, meeting):
-        minutes_remaining = int(ceil((meeting.date_time - datetime.now()).seconds / 60))
+        minutes_remaining = int(ceil((meeting.date_time - datetime.utcnow()).seconds / 60))
 
         # if we have not notified the meeting, check what type of notification to give
         if meeting.notified == database.Notification.NONE:
-            if meeting.date_time <= (datetime.now() + timedelta(minutes=10)):
+            if meeting.date_time <= (datetime.utcnow() + timedelta(minutes=10)):
                 await self.notify_meeting(meeting, database.Notification.MINUTE, minutes_remaining)
-            elif meeting.date_time <= (datetime.now() + timedelta(minutes=60)):
+            elif meeting.date_time <= (datetime.utcnow() + timedelta(minutes=60)):
                 await self.notify_meeting(meeting, database.Notification.HOUR, minutes_remaining)
 
         # if we have given the HOUR notification and there is ten minutes or less remaining
         # give the MINUTE notification
         elif (meeting.notified == database.Notification.HOUR and
-              meeting.date_time <= (datetime.now() + timedelta(minutes=10))):
+              meeting.date_time <= (datetime.utcnow() + timedelta(minutes=10))):
             await self.notify_meeting(meeting, database.Notification.MINUTE, minutes_remaining)
 
     async def notify_meeting(self, meeting, notification, minutes_remaining):
@@ -200,11 +209,10 @@ class MeetBot(Client):
             mentions += f"{label.mention} "
         return mentions[:len(mentions) - 1]
 
-    async def announce(self, message, channel_id=environ["MEETBOT_ANNOUNCE_CHANNEL"]):
+    async def announce(self, message, channel_id=int(environ["MEETBOT_ANNOUNCE_CHANNEL"])):
         logging.debug(f"ANNOUNCEMENT - {message}")
-        for guild in self.guilds:
-            channel = guild.get_channel(channel_id)
-            if channel:
+        for channel in self.get_all_channels():
+            if channel.id == channel_id:
                 await channel.send(message)
                 return
 
@@ -248,7 +256,7 @@ class MeetBot(Client):
         logging.info(f'Logged in as: {self.user.name}')
 
         for meeting in await database.get_upcoming_meetings(10):
-            minutes_remaining = int((meeting.date_time - datetime.now()).seconds / 60)
+            minutes_remaining = int((meeting.date_time - datetime.utcnow()).seconds / 60)
             if meeting.notified != database.Notification.MINUTE:
                 await self.notify_meeting(meeting, database.Notification.MINUTE, minutes_remaining)
             else:
