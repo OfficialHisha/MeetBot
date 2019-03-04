@@ -3,21 +3,17 @@
 ####Required permissions:
 * Role permissions:
     * Manage Channels
-    * Move Members
-    * Add Reactions
+    * Mention Everyone
 
 * Channel category permissions:
-    * Manage Channel
-    * Manage Permissions
     * Read Text Channels And See Voice Channels
 
 * Command channel permissions:
+    * Read Messages
     * Send Messages
-    * Manage Messages
-    * Read Message History
 
-* Voice channel permissions:
-    * Connect
+* Announcement channel permissions:
+    * Send Messages
     
 ---
 ####Environment Variables
@@ -41,6 +37,6 @@
 * MEETBOT_DATABASE_PORT
     * Database port
 * MEETBOT_COMMAND_CHANNEL
-    * Channel in which MeetBot will look for commands
+    * Channel in which MeetBot will look for commands (-1 for any channel the bot has read permissions for)
 * MEETBOT_ANNOUNCE_CHANNEL
     * Channel in which MeetBot will make announcements

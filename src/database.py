@@ -21,7 +21,6 @@ class Notification(IntEnum):
 class Meeting(Model):
     description = TextField()
     date_time = DateTimeField()
-    time_zone = SmallIntegerField()
     user_list = TextField()
     notified = SmallIntegerField(default=Notification.NONE)
 
@@ -33,8 +32,8 @@ Meeting.create_table(True)
 _database.allow_sync = False
 
 
-async def add_meeting(description, time, time_zone_offset, users):
-    await _objects.create(Meeting, description=description, date_time=time, time_zone=time_zone_offset, user_list=users)
+async def add_meeting(description, time, users):
+    await _objects.create(Meeting, description=description, date_time=time, user_list=users)
 
 
 async def remove_meeting(meeting_id):
@@ -59,8 +58,8 @@ async def get_meeting_by_id(meeting_id):
     return await _objects.get(Meeting, id=meeting_id)
 
 
-async def get_meetings_by_user(user):
-    return await _objects.execute(Meeting.select().where(Meeting.user_list.contains(user)))
+async def get_meetings_by_mentions(mentions):
+    return await _objects.execute(Meeting.select().where(any(Meeting.user_list.contains(mention) for mention in mentions)))
 
 
 async def get_upcoming_meetings(time=10):
