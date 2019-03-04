@@ -29,6 +29,6 @@ async def number_validator(number):
 
 
 async def channel_validator(channel):
-    if environ["MEETBOT_COMMAND_CHANNEL"] != -1:
-        return channel == environ["MEETBOT_COMMAND_CHANNEL"]
+    if int(environ["MEETBOT_COMMAND_CHANNEL"]) != -1:
+        return channel.id == int(environ["MEETBOT_COMMAND_CHANNEL"])
     return True
