@@ -88,6 +88,12 @@ async def on_command_error(ctx, exception):
     await ctx.send("An unexpected error occurred")
 
 
+@bot.command(name="id")
+@commands.has_role("Admin")
+async def channel_id_cmd(ctx):
+    await ctx.channel.send(f"Channel ID: {ctx.channel.id}")
+
+
 @bot.command(name="meetings")
 async def meetings_cmd(ctx, time_zone="UTC"):
     if not await validators.channel_validator(ctx.channel):
