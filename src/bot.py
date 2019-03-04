@@ -171,6 +171,7 @@ async def meeting_cancel_cmd(ctx, meeting_id):
                      f"Input was: {ctx.message}")
         print(f"{ctx.author} failed number validation check for 'meeting cancel' command\n"
               f"Input was: {ctx.message}")
+        return
 
     db_call = database.remove_meeting(meeting_id)
     await ctx.send(f"Canceled meeting with id {meeting_id}")
