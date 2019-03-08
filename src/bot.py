@@ -56,8 +56,12 @@ async def prepare_meeting(meeting):
     if not meeting.channel == -1:
         return  # The meeting has already been prepared
 
+    category = None
+    if "MEETBOT_CATEGORY_ID" in environ["MEETBOT_CATEGORY_ID"]:
+        category = environ["MEETBOT_CATEGORY_ID"]
+
     guild = await find_guild_by_id(meeting.guild)
-    channel = await guild.create_voice_channel(f"{meeting.id}: {meeting.description}")
+    channel = await guild.create_voice_channel(f"{meeting.id}: {meeting.description}", category=category)
     await database.set_meeting_channel(meeting.id, channel.id)
     await announce(f"I have assigned channel '{channel.name}' for {meeting.id}:{meeting.description}, it will be deleted in 12 hours")
 

@@ -37,6 +37,10 @@
 * MEETBOT_DATABASE_PORT
     * Database port
 * MEETBOT_COMMAND_CHANNEL
-    * Channel in which MeetBot will look for commands (-1 for any channel the bot has read permissions for)
+    * Channel in which MeetBot will look for commands
+    * Leave unset for any channel
 * MEETBOT_ANNOUNCE_CHANNEL
     * Channel in which MeetBot will make announcements
+* MEETBOT_CATEGORY_ID
+    * Category channel id for the category MeetBot should add meeting channels
+    * Leave unset for no category
