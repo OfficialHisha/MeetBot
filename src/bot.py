@@ -114,6 +114,7 @@ async def on_ready():
 @bot.event
 async def on_command_error(ctx, exception):
     logging.error(exception)
+    print(exception)
     await ctx.send("An unexpected error occurred")
 
 
@@ -128,7 +129,7 @@ async def meetings_cmd(ctx, time_zone="UTC"):
     if not await validators.channel_validator(ctx.channel):
         return
 
-    mentions = list(ctx.author.mention)
+    mentions = [ctx.author.mention]
     for role in ctx.author.roles:
         mentions.append(role.mention)
 

@@ -79,7 +79,10 @@ async def get_meeting_by_id(meeting_id):
 
 
 async def get_meetings_by_mentions(mentions):
-    return await _objects.execute(Meeting.select().where(any(Meeting.user_list.contains(mention) for mention in mentions)))
+    meetings = list()
+    for mention in mentions:
+        meetings += await _objects.execute(Meeting.select().where(Meeting.user_list.contains(mention)))
+    return meetings
 
 
 async def get_upcoming_meetings(time=10):
