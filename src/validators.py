@@ -5,7 +5,7 @@ from dateparser import parse
 _mention_re = compile(" *<@&?[0-9]*>")
 
 
-async def mention_validator(mention_string: str):
+async def mention_validator(mention_string):
     mentions = mention_string.split(' ')
 
     for mention in mentions:
@@ -29,6 +29,6 @@ async def number_validator(number):
 
 
 async def channel_validator(channel):
-    if int(environ["MEETBOT_COMMAND_CHANNEL"]) != -1:
+    if "MEETBOT_COMMAND_CHANNEL" in environ:
         return channel.id == int(environ["MEETBOT_COMMAND_CHANNEL"])
     return True
