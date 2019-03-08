@@ -5,7 +5,7 @@ from dateparser import parse
 _mention_re = compile(" *<@&?[0-9]*>")
 
 
-async def mention_validator(mention_string: str):
+async def mention_validator(mention_string):
     mentions = mention_string.split(' ')
 
     for mention in mentions:
