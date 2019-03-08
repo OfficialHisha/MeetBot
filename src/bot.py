@@ -53,12 +53,12 @@ async def find_guild_by_id(guild_id):
 
 
 async def prepare_meeting(meeting):
-    if not meeting.channel == -1:
+    if not int(meeting.channel) == -1:
         return  # The meeting has already been prepared
 
     category = None
-    if "MEETBOT_CATEGORY_ID" in environ["MEETBOT_CATEGORY_ID"]:
-        category = environ["MEETBOT_CATEGORY_ID"]
+    if "MEETBOT_CATEGORY_ID" in environ:
+        category = await find_channel_by_id(int(environ["MEETBOT_CATEGORY_ID"]))
 
     guild = await find_guild_by_id(meeting.guild)
     channel = await guild.create_voice_channel(f"{meeting.id}: {meeting.description}", category=category)
