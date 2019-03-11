@@ -15,7 +15,8 @@ bot = commands.Bot(command_prefix='!')
 async def announce(message, channel_id=int(environ["MEETBOT_ANNOUNCE_CHANNEL"])):
     logging.debug(f"ANNOUNCEMENT - {message}")
     channel = await find_channel_by_id(channel_id)
-    await channel.send(message)
+    if channel:
+        await channel.send(message)
 
 
 async def set_timer(meeting, alarm):
@@ -35,6 +36,9 @@ async def notify_meeting(meeting, notification, minutes_remaining):
 
 
 async def find_channel_by_id(channel_id):
+    if channel_id == -1:
+        return None
+
     for channel in bot.get_all_channels():
         if channel.id == int(channel_id):
             return channel
@@ -88,7 +92,8 @@ async def check_upcoming_meeting(meeting):
 
 async def cleanup_meeting(meeting):
     channel = await find_channel_by_id(meeting.channel)
-    await channel.delete()
+    if channel:
+        await channel.delete()
     await database.remove_meeting(meeting.id)
     logging.info(f"Meeting {meeting.id} was cleaned up")
     print(f"Meeting {meeting.id} was cleaned up")
