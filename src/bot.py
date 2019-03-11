@@ -99,7 +99,7 @@ async def cleanup_meeting(meeting):
     print(f"Meeting {meeting.id} was cleaned up")
 
 
-async def check_meetings(wait_time=300):
+async def check_meetings(wait_time=59):
     await bot.wait_until_ready()
     await sleep(1)
 
@@ -110,7 +110,7 @@ async def check_meetings(wait_time=300):
             await check_upcoming_meeting(meeting)
 
         await sleep(wait_time)
-bot.loop.create_task(check_meetings(10))
+bot.loop.create_task(check_meetings())
 
 
 @bot.event
@@ -263,5 +263,10 @@ async def meeting_edit_members_cmd(ctx, meeting_id, new_members):
     await ctx.send(f"Changed participants of meeting {meeting_id}")
     await db_call
 
+
 if __name__ == "__main__":
-    bot.run(environ["MEETBOT_TOKEN"])
+    try:
+        bot.run(environ["MEETBOT_TOKEN"])
+    except Exception as e:
+        print(e)
+        logging.exception(e)
