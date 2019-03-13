@@ -6,6 +6,8 @@ from enum import IntEnum
 from time import sleep
 import logging
 
+logging.basicConfig(filename='meetbot.log', level=int(environ["LOG_LEVEL"]))
+
 _connected = False
 _database = MySQLDatabase(database=environ["MEETBOT_DATABASE"],
                           user=environ["MEETBOT_DATABASE_USERNAME"],
@@ -37,9 +39,10 @@ while not _connected:
     try:
         Meeting.create_table(True)
         _connected = True
-    except OperationalError:
+    except OperationalError as e:
         _connected = False
         logging.error("Unable to establish connection to database server")
+        logging.exception(e)
         print("Unable to establish connection to database server")
         sleep(20)
         print("Retrying..")
