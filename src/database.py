@@ -1,9 +1,14 @@
 from os import environ
-from peewee import Model, DateTimeField, TextField, SmallIntegerField
+from peewee import Model, DateTimeField, TextField, SmallIntegerField, OperationalError
 from peewee_async import MySQLDatabase, Manager
 from datetime import timedelta, datetime
 from enum import IntEnum
+from time import sleep
+import logging
 
+logging.basicConfig(filename='meetbot.log', level=int(environ["LOG_LEVEL"]))
+
+_connected = False
 _database = MySQLDatabase(database=environ["MEETBOT_DATABASE"],
                           user=environ["MEETBOT_DATABASE_USERNAME"],
                           password=environ["MEETBOT_DATABASE_PASSWORD"],
@@ -30,7 +35,18 @@ class Meeting(Model):
         database = _database
 
 
-Meeting.create_table(True)
+while not _connected:
+    try:
+        Meeting.create_table(True)
+        _connected = True
+    except OperationalError as e:
+        _connected = False
+        logging.error("Unable to establish connection to database server")
+        logging.exception(e)
+        print("Unable to establish connection to database server")
+        sleep(20)
+        print("Retrying..")
+
 _database.allow_sync = False
 
 
