@@ -1,6 +1,6 @@
-#MeetBot
+# MeetBot
 
-####Required permissions:
+#### Required permissions:
 * Role permissions:
     * Manage Channels
     * Mention Everyone
@@ -16,7 +16,7 @@
     * Send Messages
     
 ---
-####Environment Variables
+#### Environment Variables
 * LOG_LEVEL
     * CRITICAL: 50
     * ERROR: 40
